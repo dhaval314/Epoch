@@ -20,7 +20,7 @@ func main(){
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	response, err := client.SubmitJob(ctx, &pb.Job{Id:"1", Command: "ls", Schedule: "5"})
+	response, err := client.SubmitJob(ctx, &pb.Job{Id:"2", Command: "ls", Schedule: "5"})
 	if err != nil{
 		log.Fatal(err)
 	}
