@@ -7,6 +7,7 @@ import (
 	pb "github.com/dhaval314/epoch/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+
 )
 
 func main(){
@@ -14,13 +15,14 @@ func main(){
 	if err != nil{
 		log.Fatal(err)
 	}
+	
 	defer conn.Close()
 
 	client := pb.NewSchedulerClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	response, err := client.SubmitJob(ctx, &pb.Job{Id:"2", Command: "ls", Schedule: "5"})
+	response, err := client.SubmitJob(ctx, &pb.Job{Id:"2", Command: "echo Hello from Docker", Schedule: "10", Image: "alpine"})
 	if err != nil{
 		log.Fatal(err)
 	}
