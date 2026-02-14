@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"io"
-	"os"
-	"fmt"
+
 	"log"
 	"net"
 	"strconv"
@@ -14,12 +12,12 @@ import (
 	//"os/exec"
 	pb "github.com/dhaval314/epoch/proto"
 	//"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/image"
-	"github.com/docker/docker/client"
 
 	"google.golang.org/grpc"
 )
+
+
+var jobQueue = make(chan *pb.Job, 100)
 
 type JobStore struct{
 	mu sync.Mutex;
@@ -31,95 +29,35 @@ var store = JobStore{
 	jobs : make(map[string]*pb.Job),
 }
 
-func executeCommand(ctx context.Context, req *pb.Job){
-
-	// NOTE: client.NewClientWithOpts is Deprecated, but the new version (client.New()) doesnt work because of dependency issues
-	// Create client 
-	apiClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err!= nil{
-		log.Printf("[-] Error creating client: %v\n", err)
-		return
-	}
-	defer apiClient.Close()
-
-	// Pull the image from dockerhub
-	reader, err := apiClient.ImagePull(ctx, req.Image, image.PullOptions{})
-	if err!= nil{
-		log.Printf("[-] Error pulling container: %v\n", err)
-		return
-	}
-	defer reader.Close()
-	
-	io.Copy(os.Stdout, reader)
-
-	// Create a container
-	resp, err := apiClient.ContainerCreate(ctx, &container.Config{
-		Cmd:   []string{"sh","-c", req.Command},
-		Image: req.Image,
-	}, nil, nil, nil, "")
-	if err != nil{
-		log.Printf("[-] Error creating container: %v\n", err)
-		return
-	}
-	log.Printf("[+] Created container with Id: %v\n", resp.ID)
-
-	// Start the container
-	err = apiClient.ContainerStart(ctx, resp.ID, container.StartOptions{})
-	if err != nil{
-		log.Printf("[-] Error starting container: %v\n", err)
-		return
-	}
-	log.Printf("[+] Started container with Id: %v\n", resp.ID)
-
-	statusCh, errCh := apiClient.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
-
-	// Wait for the container to finish
-	select{
-	case err := <-errCh:
-		if err !=nil{
-			log.Printf("[-] Error waiting: %v", err)
-            return
-		}
-	case <-statusCh:
-		// Job is done
-	}
-
-	// Get the output from the container
-	out, err := apiClient.ContainerLogs(ctx, resp.ID, container.LogsOptions{ShowStdout: true})
-    if err != nil {
-        log.Printf("[-] Error getting logs: %v", err)
-        return
-    }
-    defer out.Close()
-
-	
-	fmt.Println("--- CONTAINER OUTPUT ---")
-    io.Copy(os.Stdout, out)
-    fmt.Println("------------------------")
-}
-
 func runScheduler() {
-	curr_time := time.Now().Unix()
-	for {
-		time.Sleep(1* time.Second)
-		store.mu.Lock()
+    log.Println("[+] Scheduler started...")
+    for {
+        time.Sleep(1 * time.Second)
+		
+        func() {
+            store.mu.Lock()
+            defer store.mu.Unlock() 
 
-		// Iterate over jobs
-		for jobId, job := range store.jobs{
-			if sch, err := strconv.Atoi(job.Schedule); err == nil {
+            now := time.Now().Unix()
 
-				// Check if its time to execute the command
-				if (time.Now().Unix() - curr_time) % int64(sch) == 0 {
-					log.Printf("[+] Executing %v : %v", jobId, job.Command)
-					ctx := context.Background()
-					go executeCommand(ctx, job)
-				}
-			} else{
-				log.Printf("[-] Invalid Schedule %v for Job %v. Error: %v", job.Schedule, jobId, err)
-			}
-		}
-		store.mu.Unlock()
-	}
+            for jobId, job := range store.jobs {
+                sch, err := strconv.Atoi(job.Schedule)
+                if err != nil {
+                    continue
+                }
+
+                if now % int64(sch) == 0 {
+                    log.Printf("[*] Scheduling Job %s", jobId)
+                    select {
+                    case jobQueue <- job:
+                        log.Println("[+] Job pushed to queue")
+                    default:
+                        log.Println("[-] Job queue full! Skipping.")
+                    }
+                }
+            }
+        }() 
+    }
 }
 
 
@@ -131,10 +69,28 @@ type server struct{
 func (s *server) SubmitJob(ctx context.Context, req *pb.Job) (*pb.JobResponse, error){
 	store.mu.Lock() // No two goroutines can access the hashmap at the same time
 	defer store.mu.Unlock()
-
+	jobQueue <- req
 	store.jobs[req.Id] = req
 	log.Printf("[+] Saved Job %v : %v", req.Id, req.Command)
 	return &pb.JobResponse{Success: true, Message: "[+] Job Accepted by the server"}, nil // server response
+}
+
+func (s *server) ConnectWorker(req *pb.WorkerHello, stream grpc.ServerStreamingServer[pb.Job]) (error){
+	log.Printf("[+] Worker %s connected", req.WorkerId)
+	for {
+		select{
+		case job := <- jobQueue: // If a new job enters the channel, it is sent to the worker
+			log.Printf("[*] Dispatching Job %s to Worker %s", job.Id, req.WorkerId)
+			err := stream.Send(job)
+			if err != nil{
+				log.Printf("[-] Error sending job to worker: %v", err)
+				return err
+			}
+		case <-stream.Context().Done():
+			log.Printf("[-] Worker %s disconnected.", req.WorkerId)
+			return nil
+		}
+	}
 }
 
 func main(){

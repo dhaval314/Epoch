@@ -15,6 +15,37 @@ message JobResponse {
     string id  = 3;
 }
 
+message JobStatusResponse {
+  string job_id = 1;
+  string status = 2; // "QUEUED", "RUNNING", "COMPLETED", "FAILED"
+  string output = 3; // The logs (e.g., "Hello from Docker")
+}
+
+message JobStatusRequest {
+  string job_id = 1;
+}
+
+message WorkerHello {
+  string worker_id = 1; // e.g., "worker-1"
+  int32 memory_mb = 2;  // e.g., 2048
+}
+
+
+// Sent by Worker ONLY when finished
+message JobResult {
+  string job_id = 1;
+  bool success = 2;  // True = Exit Code 0, False = Crashed
+  string output = 3;
+}
+
+message Empty {}
+
 service Scheduler {
     rpc SubmitJob(Job) returns (JobResponse);
+
+    rpc ConnectWorker (WorkerHello) returns (stream Job);
+
+    rpc CompleteJob (JobResult) returns (Empty);
+
+    rpc GetJobStatus (JobStatusRequest) returns (JobStatusResponse);
 }

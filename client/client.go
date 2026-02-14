@@ -13,7 +13,7 @@ import (
 func main(){
 	conn, err := grpc.NewClient("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil{
-		log.Fatal(err)
+		log.Fatalf("[-] Error connecting to server: %v", err)
 	}
 	
 	defer conn.Close()
@@ -24,7 +24,7 @@ func main(){
 
 	response, err := client.SubmitJob(ctx, &pb.Job{Id:"2", Command: "echo Hello from Docker", Schedule: "10", Image: "alpine"})
 	if err != nil{
-		log.Fatal(err)
+		log.Fatalf("[-] Error sending job to server %v", err)
 	}
 	log.Println(response.GetMessage())
 }

@@ -19,7 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Scheduler_SubmitJob_FullMethodName = "/scheduler.Scheduler/SubmitJob"
+	Scheduler_SubmitJob_FullMethodName     = "/scheduler.Scheduler/SubmitJob"
+	Scheduler_ConnectWorker_FullMethodName = "/scheduler.Scheduler/ConnectWorker"
+	Scheduler_CompleteJob_FullMethodName   = "/scheduler.Scheduler/CompleteJob"
+	Scheduler_GetJobStatus_FullMethodName  = "/scheduler.Scheduler/GetJobStatus"
 )
 
 // SchedulerClient is the client API for Scheduler service.
@@ -27,6 +30,9 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type SchedulerClient interface {
 	SubmitJob(ctx context.Context, in *Job, opts ...grpc.CallOption) (*JobResponse, error)
+	ConnectWorker(ctx context.Context, in *WorkerHello, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Job], error)
+	CompleteJob(ctx context.Context, in *JobResult, opts ...grpc.CallOption) (*Empty, error)
+	GetJobStatus(ctx context.Context, in *JobStatusRequest, opts ...grpc.CallOption) (*JobStatusResponse, error)
 }
 
 type schedulerClient struct {
@@ -47,11 +53,53 @@ func (c *schedulerClient) SubmitJob(ctx context.Context, in *Job, opts ...grpc.C
 	return out, nil
 }
 
+func (c *schedulerClient) ConnectWorker(ctx context.Context, in *WorkerHello, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Job], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &Scheduler_ServiceDesc.Streams[0], Scheduler_ConnectWorker_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[WorkerHello, Job]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Scheduler_ConnectWorkerClient = grpc.ServerStreamingClient[Job]
+
+func (c *schedulerClient) CompleteJob(ctx context.Context, in *JobResult, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, Scheduler_CompleteJob_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *schedulerClient) GetJobStatus(ctx context.Context, in *JobStatusRequest, opts ...grpc.CallOption) (*JobStatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(JobStatusResponse)
+	err := c.cc.Invoke(ctx, Scheduler_GetJobStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SchedulerServer is the server API for Scheduler service.
 // All implementations must embed UnimplementedSchedulerServer
 // for forward compatibility.
 type SchedulerServer interface {
 	SubmitJob(context.Context, *Job) (*JobResponse, error)
+	ConnectWorker(*WorkerHello, grpc.ServerStreamingServer[Job]) error
+	CompleteJob(context.Context, *JobResult) (*Empty, error)
+	GetJobStatus(context.Context, *JobStatusRequest) (*JobStatusResponse, error)
 	mustEmbedUnimplementedSchedulerServer()
 }
 
@@ -64,6 +112,15 @@ type UnimplementedSchedulerServer struct{}
 
 func (UnimplementedSchedulerServer) SubmitJob(context.Context, *Job) (*JobResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SubmitJob not implemented")
+}
+func (UnimplementedSchedulerServer) ConnectWorker(*WorkerHello, grpc.ServerStreamingServer[Job]) error {
+	return status.Error(codes.Unimplemented, "method ConnectWorker not implemented")
+}
+func (UnimplementedSchedulerServer) CompleteJob(context.Context, *JobResult) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method CompleteJob not implemented")
+}
+func (UnimplementedSchedulerServer) GetJobStatus(context.Context, *JobStatusRequest) (*JobStatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetJobStatus not implemented")
 }
 func (UnimplementedSchedulerServer) mustEmbedUnimplementedSchedulerServer() {}
 func (UnimplementedSchedulerServer) testEmbeddedByValue()                   {}
@@ -104,6 +161,53 @@ func _Scheduler_SubmitJob_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Scheduler_ConnectWorker_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(WorkerHello)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(SchedulerServer).ConnectWorker(m, &grpc.GenericServerStream[WorkerHello, Job]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Scheduler_ConnectWorkerServer = grpc.ServerStreamingServer[Job]
+
+func _Scheduler_CompleteJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(JobResult)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SchedulerServer).CompleteJob(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Scheduler_CompleteJob_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SchedulerServer).CompleteJob(ctx, req.(*JobResult))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Scheduler_GetJobStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(JobStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SchedulerServer).GetJobStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Scheduler_GetJobStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SchedulerServer).GetJobStatus(ctx, req.(*JobStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Scheduler_ServiceDesc is the grpc.ServiceDesc for Scheduler service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -115,7 +219,21 @@ var Scheduler_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "SubmitJob",
 			Handler:    _Scheduler_SubmitJob_Handler,
 		},
+		{
+			MethodName: "CompleteJob",
+			Handler:    _Scheduler_CompleteJob_Handler,
+		},
+		{
+			MethodName: "GetJobStatus",
+			Handler:    _Scheduler_GetJobStatus_Handler,
+		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "ConnectWorker",
+			Handler:       _Scheduler_ConnectWorker_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "proto/scheduler.proto",
 }
