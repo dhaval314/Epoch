@@ -21,12 +21,18 @@ var jobQueue = make(chan *pb.Job, 100)
 
 type JobStore struct{
 	mu sync.Mutex;
-	jobs map[string]*pb.Job // HashMap to store all the jobs
+	jobs map[string]JobContext // HashMap to store all the jobs
+}
+
+type JobContext struct{
+	status string;
+	output string;
+	job *pb.Job
 }
 
 // Initialize the JobStore struct
 var store = JobStore{
-	jobs : make(map[string]*pb.Job),
+	jobs : make(map[string]JobContext),
 }
 
 func runScheduler() {
@@ -40,8 +46,8 @@ func runScheduler() {
 
             now := time.Now().Unix()
 
-            for jobId, job := range store.jobs {
-                sch, err := strconv.Atoi(job.Schedule)
+            for jobId, jobContext := range store.jobs {
+                sch, err := strconv.Atoi(jobContext.job.Schedule)
                 if err != nil {
                     continue
                 }
@@ -49,7 +55,7 @@ func runScheduler() {
                 if now % int64(sch) == 0 {
                     log.Printf("[*] Scheduling Job %s", jobId)
                     select {
-                    case jobQueue <- job:
+                    case jobQueue <- jobContext.job:
                         log.Println("[+] Job pushed to queue")
                     default:
                         log.Println("[-] Job queue full! Skipping.")
@@ -66,15 +72,22 @@ type server struct{
 	pb.UnimplementedSchedulerServer
 }
 
+// Client calls this function to submit a job to the server
 func (s *server) SubmitJob(ctx context.Context, req *pb.Job) (*pb.JobResponse, error){
 	store.mu.Lock() // No two goroutines can access the hashmap at the same time
 	defer store.mu.Unlock()
 	jobQueue <- req
-	store.jobs[req.Id] = req
+	new_context := JobContext{
+		status: "QUEUED",
+		output: "",
+		job: req,
+	}
+	store.jobs[req.Id] = new_context
 	log.Printf("[+] Saved Job %v : %v", req.Id, req.Command)
 	return &pb.JobResponse{Success: true, Message: "[+] Job Accepted by the server"}, nil // server response
 }
 
+// Worker calls this function to connect to the server 
 func (s *server) ConnectWorker(req *pb.WorkerHello, stream grpc.ServerStreamingServer[pb.Job]) (error){
 	log.Printf("[+] Worker %s connected", req.WorkerId)
 	for {
@@ -91,6 +104,41 @@ func (s *server) ConnectWorker(req *pb.WorkerHello, stream grpc.ServerStreamingS
 			return nil
 		}
 	}
+}
+
+// Worker calls this function to let the server know that the job has been completed
+func (s* server) CompleteJob(ctx context.Context, req *pb.JobResult)(*pb.Empty, error){
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	
+	// Retrieve job Id, status, and job context
+	status := req.Success
+	jobId := req.JobId
+	jobContext := store.jobs[jobId]
+
+	// Update the job status accordingly
+	if status == true{
+		jobContext.status = "COMPLETED"
+		store.jobs[jobId] = jobContext
+		log.Printf("[+] Job %v : %v", jobContext.job.Id, jobContext.status)
+	} else{
+		jobContext.status = "FAILED"
+		store.jobs[jobId] = jobContext
+		log.Printf("[+] Job %v : %v", jobContext.job.Id, jobContext.status)
+	}
+
+	return &pb.Empty{}, nil
+}
+
+func (s* server) GetJobStatus(ctx context.Context, req *pb.JobStatusRequest)(*pb.JobStatusResponse, error){
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	jobContext := store.jobs[req.JobId]
+
+	return &pb.JobStatusResponse{JobId: req.JobId,
+								 Status: jobContext.status,
+								 Output: jobContext.output,}, nil				
+
 }
 
 func main(){

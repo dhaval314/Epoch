@@ -15,14 +15,14 @@ import (
 	"github.com/docker/docker/client"
 )
 
-func executeCommand(ctx context.Context, req *pb.Job){
+func executeCommand(ctx context.Context, req *pb.Job)(string, error){
 
 	// NOTE: client.NewClientWithOpts is Deprecated, but the new version (client.New()) doesnt work because of dependency issues
 	// Create client 
 	apiClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err!= nil{
 		log.Printf("[-] Error creating client: %v\n", err)
-		return
+		return "", err
 	}
 	defer apiClient.Close()
 
@@ -30,7 +30,7 @@ func executeCommand(ctx context.Context, req *pb.Job){
 	reader, err := apiClient.ImagePull(ctx, req.Image, image.PullOptions{})
 	if err!= nil{
 		log.Printf("[-] Error pulling container: %v\n", err)
-		return
+		return "", err
 	}
 	defer reader.Close()
 	
@@ -43,7 +43,7 @@ func executeCommand(ctx context.Context, req *pb.Job){
 	}, nil, nil, nil, "")
 	if err != nil{
 		log.Printf("[-] Error creating container: %v\n", err)
-		return
+		return "", err
 	}
 	log.Printf("[+] Created container with Id: %v\n", resp.ID)
 
@@ -51,7 +51,7 @@ func executeCommand(ctx context.Context, req *pb.Job){
 	err = apiClient.ContainerStart(ctx, resp.ID, container.StartOptions{})
 	if err != nil{
 		log.Printf("[-] Error starting container: %v\n", err)
-		return
+		return "", err
 	}
 	log.Printf("[+] Started container with Id: %v\n", resp.ID)
 
@@ -62,7 +62,7 @@ func executeCommand(ctx context.Context, req *pb.Job){
 	case err := <-errCh:
 		if err !=nil{
 			log.Printf("[-] Error waiting: %v", err)
-            return
+            return "", err
 		}
 	case <-statusCh:
 		// Job is done
@@ -72,14 +72,19 @@ func executeCommand(ctx context.Context, req *pb.Job){
 	out, err := apiClient.ContainerLogs(ctx, resp.ID, container.LogsOptions{ShowStdout: true})
     if err != nil {
         log.Printf("[-] Error getting logs: %v", err)
-        return
+        return "", err
     }
     defer out.Close()
 
-	
+	// Print the container output
 	fmt.Println("--- CONTAINER OUTPUT ---")
     io.Copy(os.Stdout, out)
     fmt.Println("------------------------")
+
+	// Return the container output
+	bodyBytes, err := io.ReadAll(out)
+	bodyString := string(bodyBytes)
+	return bodyString, nil
 }
 
 func main(){
@@ -103,8 +108,18 @@ func main(){
 			log.Printf("[-] Error Recieving job: %v\n", err)
 			break
 		}
-		executeCommand(context.Background(), job)
-		
+		output, err := executeCommand(context.Background(), job)
+		if err != nil{
+			client.CompleteJob(context.Background(), &pb.JobResult{
+																	JobId: job.Id, 
+																	Success: false,
+																	Output: output,})
+		} else{
+			client.CompleteJob(context.Background(), &pb.JobResult{
+																	JobId: job.Id, 
+																	Success: true,
+																	Output: output,})
+		}
 	}
 }
 
