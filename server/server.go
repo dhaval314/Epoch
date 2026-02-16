@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-
+	"fmt"
 	"log"
 	"net"
 	"strconv"
@@ -119,10 +119,12 @@ func (s* server) CompleteJob(ctx context.Context, req *pb.JobResult)(*pb.Empty, 
 	// Update the job status accordingly
 	if status == true{
 		jobContext.status = "COMPLETED"
+		jobContext.output = req.Output
 		store.jobs[jobId] = jobContext
 		log.Printf("[+] Job %v : %v", jobContext.job.Id, jobContext.status)
 	} else{
 		jobContext.status = "FAILED"
+		jobContext.output = req.Output
 		store.jobs[jobId] = jobContext
 		log.Printf("[+] Job %v : %v", jobContext.job.Id, jobContext.status)
 	}
@@ -133,11 +135,14 @@ func (s* server) CompleteJob(ctx context.Context, req *pb.JobResult)(*pb.Empty, 
 func (s* server) GetJobStatus(ctx context.Context, req *pb.JobStatusRequest)(*pb.JobStatusResponse, error){
 	store.mu.Lock()
 	defer store.mu.Unlock()
-	jobContext := store.jobs[req.JobId]
+	jobContext, ok := store.jobs[req.JobId]
+	if !ok {
+    	return nil, fmt.Errorf("[-] Job not found")
+	}
 
 	return &pb.JobStatusResponse{JobId: req.JobId,
 								 Status: jobContext.status,
-								 Output: jobContext.output,}, nil				
+								 Output: string(jobContext.output),}, nil				
 
 }
 

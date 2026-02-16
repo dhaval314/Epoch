@@ -3,7 +3,6 @@ package main
 import (
 	"io"
 	"os"
-	"fmt"
 	"context"
 	"log"
 	pb "github.com/dhaval314/epoch/proto"
@@ -67,6 +66,7 @@ func executeCommand(ctx context.Context, req *pb.Job)(string, error){
 	case <-statusCh:
 		// Job is done
 	}
+	log.Printf("[+] Executed container with Id: %v\n", resp.ID)
 
 	// Get the output from the container
 	out, err := apiClient.ContainerLogs(ctx, resp.ID, container.LogsOptions{ShowStdout: true})
@@ -76,13 +76,12 @@ func executeCommand(ctx context.Context, req *pb.Job)(string, error){
     }
     defer out.Close()
 
-	// Print the container output
-	fmt.Println("--- CONTAINER OUTPUT ---")
-    io.Copy(os.Stdout, out)
-    fmt.Println("------------------------")
-
 	// Return the container output
 	bodyBytes, err := io.ReadAll(out)
+	if err != nil{
+		log.Println("[-] Error reading container output")
+		return "", nil
+	}
 	bodyString := string(bodyBytes)
 	return bodyString, nil
 }
@@ -105,20 +104,30 @@ func main(){
 	for{
 		job, err := stream.Recv()
 		if err != nil{
-			log.Printf("[-] Error Recieving job: %v\n", err)
+			log.Printf("[-] Error recieving job: %v\n", err)
 			break
 		}
 		output, err := executeCommand(context.Background(), job)
 		if err != nil{
-			client.CompleteJob(context.Background(), &pb.JobResult{
+			_, err := client.CompleteJob(context.Background(), &pb.JobResult{
 																	JobId: job.Id, 
 																	Success: false,
 																	Output: output,})
+			if err != nil{
+				log.Printf("[-] Error sending job result to server")
+			} else{
+				log.Printf("[+] Sent job result to server")
+			}
 		} else{
-			client.CompleteJob(context.Background(), &pb.JobResult{
+			_, err := client.CompleteJob(context.Background(), &pb.JobResult{
 																	JobId: job.Id, 
 																	Success: true,
 																	Output: output,})
+			if err != nil{
+				log.Printf("[-] Error sending job result to server")
+			} else{
+				log.Printf("[+] Sent job result to server")
+			}
 		}
 	}
 }
