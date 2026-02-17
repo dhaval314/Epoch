@@ -6,34 +6,29 @@ import (
 	"log"
 	"net"
 	"strconv"
-	"sync"
 	"time"
-
-	//"os/exec"
 	pb "github.com/dhaval314/epoch/proto"
-	//"github.com/docker/docker/api/types"
-
 	"google.golang.org/grpc"
 )
 
 
 var jobQueue = make(chan *pb.Job, 100)
 
-type JobStore struct{
-	mu sync.Mutex;
-	jobs map[string]JobContext // HashMap to store all the jobs
-}
+// type JobStore struct{
+// 	mu sync.Mutex;
+// 	jobs map[string]JobContext // HashMap to store all the jobs
+// }
 
-type JobContext struct{
-	status string;
-	output string;
-	job *pb.Job
-}
+// type JobContext struct{
+// 	status string;
+// 	output string;
+// 	job *pb.Job
+// }
 
-// Initialize the JobStore struct
-var store = JobStore{
-	jobs : make(map[string]JobContext),
-}
+// // Initialize the JobStore struct
+// var store = JobStore{
+// 	jobs : make(map[string]JobContext),
+// }
 
 func runScheduler() {
     log.Println("[+] Scheduler started...")
@@ -47,7 +42,7 @@ func runScheduler() {
             now := time.Now().Unix()
 
             for jobId, jobContext := range store.jobs {
-                sch, err := strconv.Atoi(jobContext.job.Schedule)
+                sch, err := strconv.Atoi(jobContext.Job.Schedule)
                 if err != nil {
                     continue
                 }
@@ -55,7 +50,7 @@ func runScheduler() {
                 if now % int64(sch) == 0 {
                     log.Printf("[*] Scheduling Job %s", jobId)
                     select {
-                    case jobQueue <- jobContext.job:
+                    case jobQueue <- jobContext.Job:
                         log.Println("[+] Job pushed to queue")
                     default:
                         log.Println("[-] Job queue full! Skipping.")
@@ -78,11 +73,16 @@ func (s *server) SubmitJob(ctx context.Context, req *pb.Job) (*pb.JobResponse, e
 	defer store.mu.Unlock()
 	jobQueue <- req
 	new_context := JobContext{
-		status: "QUEUED",
-		output: "",
-		job: req,
+		Status: "QUEUED",
+		Output: "",
+		Job: req,
 	}
 	store.jobs[req.Id] = new_context
+
+	// Save the job in the DB
+	if err := SaveJob(req.Id, new_context, store.db); err != nil {
+    	log.Printf("[-] Failed to save job to DB: %v", err)
+	}
 	log.Printf("[+] Saved Job %v : %v", req.Id, req.Command)
 	return &pb.JobResponse{Success: true, Message: "[+] Job Accepted by the server"}, nil // server response
 }
@@ -118,15 +118,18 @@ func (s* server) CompleteJob(ctx context.Context, req *pb.JobResult)(*pb.Empty, 
 
 	// Update the job status accordingly
 	if status == true{
-		jobContext.status = "COMPLETED"
-		jobContext.output = req.Output
+		jobContext.Status = "COMPLETED"
+		jobContext.Output = req.Output
 		store.jobs[jobId] = jobContext
-		log.Printf("[+] Job %v : %v", jobContext.job.Id, jobContext.status)
+		if err := SaveJob(req.JobId, jobContext, store.db); err != nil { 
+    		log.Printf("[-] Failed to save job completion: %v", err)
+		}
+		log.Printf("[+] Job %v : %v", jobContext.Job.Id, jobContext.Status)
 	} else{
-		jobContext.status = "FAILED"
-		jobContext.output = req.Output
+		jobContext.Status = "FAILED"
+		jobContext.Output = req.Output
 		store.jobs[jobId] = jobContext
-		log.Printf("[+] Job %v : %v", jobContext.job.Id, jobContext.status)
+		log.Printf("[+] Job %v : %v", jobContext.Job.Id, jobContext.Status)
 	}
 
 	return &pb.Empty{}, nil
@@ -141,8 +144,8 @@ func (s* server) GetJobStatus(ctx context.Context, req *pb.JobStatusRequest)(*pb
 	}
 
 	return &pb.JobStatusResponse{JobId: req.JobId,
-								 Status: jobContext.status,
-								 Output: string(jobContext.output),}, nil				
+								 Status: jobContext.Status,
+								 Output: string(jobContext.Output),}, nil				
 
 }
 
@@ -155,6 +158,14 @@ func main(){
 	log.Printf("[+] Server listening on port %v", port)
 	go runScheduler()
 
+	if store.db, err = CreateDB(); err != nil{
+		log.Printf("[-] Error creating database: %v", err)
+	}
+	if err = LoadJobs(store.db); err!=nil{
+		log.Printf("[-] Error loading jobs into hashmap: %v", err)
+	}
+	defer store.db.Close()
+	
 	grpcServer := grpc.NewServer()
 	pb.RegisterSchedulerServer(grpcServer, &server{})
 	if err:= grpcServer.Serve(lis); err != nil{

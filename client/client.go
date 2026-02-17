@@ -22,16 +22,16 @@ func main(){
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	response, err := client.SubmitJob(ctx, &pb.Job{Id:"1", Command: "echo Hello from Docker", Schedule: "10", Image: "alpine"})
+	response, err := client.SubmitJob(ctx, &pb.Job{Id:"1", Command: "nope", Schedule: "15", Image: "alpine"})
 	if err != nil{
 		log.Fatalf("[-] Error sending job to server %v", err)
 	}
 
 	log.Println(response.GetMessage())
-	for{
-		time.Sleep(1000000000)
-		log.Println(client.GetJobStatus(context.Background(), &pb.JobStatusRequest{JobId: "1"}))
+	// for{
+	// 	time.Sleep(1000000000)
+	// 	log.Println(client.GetJobStatus(context.Background(), &pb.JobStatusRequest{JobId: "1"}))
 
-	}
+	// }
 }
 
