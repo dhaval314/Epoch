@@ -2,13 +2,18 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"strconv"
 	"time"
+
 	pb "github.com/dhaval314/epoch/proto"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 
@@ -156,6 +161,45 @@ func main(){
 		log.Fatal(err)
 	}
 	log.Printf("[+] Server listening on port %v", port)
+	
+	// Load the server certifcates and keys
+	serverCert, err := os.ReadFile("certs/server-cert.pem")
+	if err != nil{
+		log.Fatalf("[-] Error loading server certificate %v", err)
+	}
+	serverKey, err := os.ReadFile("certs/server-key.pem")
+	if err != nil{
+		log.Fatalf("[-] Error loading server key %v", err)
+	}
+
+	// Root cert
+	caCert, err := os.ReadFile("certs/ca-cert.pem")
+	if err != nil{
+		log.Printf("[-] Error loading server certificate %v", err)
+	}
+
+	// Generate a certificate using key and cert block
+	cert, err := tls.X509KeyPair(serverCert, serverKey)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Create a cert pool and add the root ca to it
+	caCertPool := x509.NewCertPool()
+	if ok := caCertPool.AppendCertsFromPEM(caCert); !ok {
+        log.Fatalln("[-] Could not append cert to pool")
+    }
+
+	// Create a custom TLS configuration
+	tlsConfig := &tls.Config{
+		ClientCAs: caCertPool,
+		ClientAuth: tls.RequireAndVerifyClientCert,
+		Certificates: []tls.Certificate{cert},
+	}
+
+	// Wrap the tls.Config
+	creds := credentials.NewTLS(tlsConfig)
+
 	go runScheduler()
 
 	if store.db, err = CreateDB(); err != nil{
@@ -166,7 +210,7 @@ func main(){
 	}
 	defer store.db.Close()
 	
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(grpc.Creds(creds)) // Create a new grpc server using the credentials
 	pb.RegisterSchedulerServer(grpcServer, &server{})
 	if err:= grpcServer.Serve(lis); err != nil{
 		log.Fatal(err)

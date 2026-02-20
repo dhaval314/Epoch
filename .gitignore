@@ -3,3 +3,5 @@
 __pycache__/
 .env
 badger/
+/certs/*.pem
+/certs/*.srl

@@ -1,13 +1,16 @@
 package main
 
 import (
-	"io"
-	"os"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"io"
 	"log"
+	"os"
+
 	pb "github.com/dhaval314/epoch/proto"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
@@ -87,7 +90,30 @@ func executeCommand(ctx context.Context, req *pb.Job)(string, error){
 }
 
 func main(){
-	conn, err := grpc.NewClient("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+	// Generate the certificate from the pem blocks
+	cert, err := tls.LoadX509KeyPair("certs/worker-cert.pem", "certs/worker-key.pem")
+	if err != nil{
+		log.Fatalf("[-] Error reading certificates %v", err)
+	}
+
+	// Root cert
+	caCert, err := os.ReadFile("certs/ca-cert.pem")
+	if err != nil{
+		log.Printf("[-] Error loading server certificate %v", err)
+	}
+
+	// Create a cert pool and add the root ca to it
+	caCertPool := x509.NewCertPool()
+	if ok := caCertPool.AppendCertsFromPEM(caCert); !ok {
+        log.Fatalln("[-] Could not append cert to pool")
+    }
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		RootCAs: caCertPool, // The Server used ClientCAs to verify incoming clients. The Client/Worker uses RootCAs to verify the destination server.
+	}
+
+	conn, err := grpc.NewClient("localhost:50051", grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
 	if err != nil{
 		log.Printf("[-] Error connecting to server: %v\n", err)
 	}
@@ -97,7 +123,7 @@ func main(){
 	client := pb.NewSchedulerClient(conn)
 	ctx:= context.Background()
 
-	stream, err := client.ConnectWorker(ctx, &pb.WorkerHello{WorkerId: "1", MemoryMb: 2})
+	stream, err := client.ConnectWorker(ctx, &pb.WorkerHello{WorkerId: "2", MemoryMb: 2})
 	if err != nil{
 		log.Printf("[-] Error connecting to server: %v\n", err)
 	}
