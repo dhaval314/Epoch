@@ -5,3 +5,4 @@ __pycache__/
 badger/
 /certs/*.pem
 /certs/*.srl
+/bin
