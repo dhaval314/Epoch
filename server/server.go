@@ -133,7 +133,7 @@ func (s* server) CompleteJob(ctx context.Context, req *pb.JobResult)(*pb.Empty, 
 	// Update the job status accordingly
 	if status == true{
 		jobContext.Status = "COMPLETED"
-		jobContext.Output = req.Output
+		jobContext.Output += req.Output + "\n"
 		store.jobs[jobId] = jobContext
 		if err := SaveJob(req.JobId, jobContext, store.db); err != nil { 
     		log.Printf("[-] Failed to save job completion: %v", err)

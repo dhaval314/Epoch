@@ -113,12 +113,36 @@ def test_failed_submit_job():
     # Get the id of the submitted job
     nums = re.findall(r"\d+", out.stderr)
     id = nums[-1]
-    
+
     out = subprocess.run(["./bin/client", "status", "-j", str(id)],
                         capture_output=True,
                         text=True,
                         check=True)
-    time.sleep(2)
+    time.sleep(1)
 
     assert out.returncode == 0
     assert "FAILED" in out.stderr
+
+def test_cron_job():
+    # Test if a scheduled job works as expected
+    out = subprocess.run(["./bin/client","submit", "-i", "alpine", "-c", "echo Hello from test_cron_job", "-s", "2"],
+                            capture_output=True,
+                            text=True,
+                            check=True)
+    time.sleep(7)
+
+    # Get the id of the submitted job
+    nums = re.findall(r"\d+", out.stderr)
+    id = nums[-1]
+
+    out = subprocess.run(["./bin/client", "status", "-j", str(id)],
+                        capture_output=True,
+                        text=True,
+                        check=True)
+    time.sleep(1)
+
+    matches = re.findall("Hello from test_cron_job", out.stderr)
+
+    assert out.returncode == 0
+    assert len(matches) >= 2
+    
