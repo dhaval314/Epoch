@@ -101,4 +101,24 @@ def test_check_status():
     
     assert out.returncode == 0
     assert "Hello from test_check_status" in out.stderr
+
+def test_failed_submit_job():
+    # Testing whether a failed job properly reflects in store.jobs
+    out = subprocess.run(["./bin/client","submit", "-i", "this-image-does-not-exist", "-c", "echo Hello from test_failed_job_submit", "-s", "-1"],
+                            capture_output=True,
+                            text=True,
+                            check=True)
+    time.sleep(5)
+
+    # Get the id of the submitted job
+    nums = re.findall(r"\d+", out.stderr)
+    id = nums[-1]
     
+    out = subprocess.run(["./bin/client", "status", "-j", str(id)],
+                        capture_output=True,
+                        text=True,
+                        check=True)
+    time.sleep(2)
+
+    assert out.returncode == 0
+    assert "FAILED" in out.stderr
