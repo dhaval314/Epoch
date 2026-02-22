@@ -3,6 +3,13 @@ import subprocess
 import shutil
 import os
 import time
+import re
+
+def debug(s):
+    # Helper function to debug outputs
+    print("------")
+    print(s)
+    print("------")
 
 @pytest.fixture(scope="session")
 def distributed_setup():
@@ -66,16 +73,32 @@ def server_and_worker(distributed_setup):
 def test_submit_one_off_job():
     # Submit a job using the client
     
-    out = subprocess.run(["./bin/client","submit", "-i", "alpine", "-c", "echo Hello from test_submit_job", "-s", "-1"],
+    out = subprocess.run(["./bin/client","submit", "-i", "alpine", "-c", "echo Hello from test_submit_one_off_job", "-s", "-1"],
                             capture_output=True,
                             text=True,
                             check=True)
-    time.sleep(7)
+    time.sleep(2)
     assert out.returncode == 0
-    
+    assert "[+] Job Accepted by the server" in out.stderr
 
-    
-   
-    
+def test_check_status():
+    # Check the status of a job
+    out = subprocess.run(["./bin/client","submit", "-i", "alpine", "-c", "echo Hello from test_check_status", "-s", "-1"],
+                            capture_output=True,
+                            text=True,
+                            check=True)
+    time.sleep(5)
 
+    # Get the id of the submitted job
+    nums = re.findall(r"\d+", out.stderr)
+    id = nums[-1]
+
+    out = subprocess.run(["./bin/client", "status", "-j", str(id)],
+                        capture_output=True,
+                        text=True,
+                        check=True)
+    time.sleep(2)
+    
+    assert out.returncode == 0
+    assert "Hello from test_check_status" in out.stderr
     

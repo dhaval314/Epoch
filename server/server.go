@@ -98,7 +98,7 @@ func (s *server) SubmitJob(ctx context.Context, req *pb.Job) (*pb.JobResponse, e
     	log.Printf("[-] Failed to save job to DB: %v", err)
 	}
 	log.Printf("[+] Saved Job %v : %v", req.Id, req.Command)
-	return &pb.JobResponse{Success: true, Message: "[+] Job Accepted by the server"}, nil // server response
+	return &pb.JobResponse{Success: true, Message: "[+] Job Accepted by the server", Id: req.Id}, nil // server response
 }
 
 // Worker calls this function to connect to the server 

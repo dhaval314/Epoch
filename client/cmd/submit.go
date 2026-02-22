@@ -77,5 +77,5 @@ func submitJob(cmd *cobra.Command, args []string){
 	if err != nil{
 		log.Fatalf("[-] Error sending job to server %v", err)
 	}
-	log.Println(response.GetMessage())
+	log.Println(response.GetMessage(), response.GetId())
 }
