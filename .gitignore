@@ -3,6 +3,9 @@
 __pycache__/
 .env
 badger/
+
 /certs/*.pem
 /certs/*.srl
+
 /bin
+.pytest_cache/

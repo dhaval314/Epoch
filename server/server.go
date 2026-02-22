@@ -51,15 +51,24 @@ func runScheduler() {
                 if err != nil {
                     continue
                 }
-
-                if now % int64(sch) == 0 {
-                    log.Printf("[*] Scheduling Job %s", jobId)
-                    select {
+				if sch == -1{
+					log.Printf("[*] Scheduling one-off Job %s", jobId)
+					select {
                     case jobQueue <- jobContext.Job:
                         log.Println("[+] Job pushed to queue")
+						jobContext.Job.Schedule = "0"
+						store.jobs[jobId] = jobContext
                     default:
                         log.Println("[-] Job queue full! Skipping.")
                     }
+				} else if sch > 0 && now % int64(sch) == 0 {
+					log.Printf("[*] Scheduling Job %s", jobId)
+					select {
+					case jobQueue <- jobContext.Job:
+						log.Println("[+] Job pushed to queue")
+					default:
+						log.Println("[-] Job queue full! Skipping.")
+					}
                 }
             }
         }() 
@@ -76,7 +85,7 @@ type server struct{
 func (s *server) SubmitJob(ctx context.Context, req *pb.Job) (*pb.JobResponse, error){
 	store.mu.Lock() // No two goroutines can access the hashmap at the same time
 	defer store.mu.Unlock()
-	jobQueue <- req
+
 	new_context := JobContext{
 		Status: "QUEUED",
 		Output: "",

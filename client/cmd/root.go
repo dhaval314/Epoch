@@ -32,7 +32,7 @@ func init() {
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 
-	rootCmd.PersistentFlags().StringVarP(&target, "target", "t", "localhost:50051", "Server IP")
+	rootCmd.PersistentFlags().StringVarP(&target, "target", "t", "127.0.0.1:50051", "Server IP")
 	rootCmd.PersistentFlags().StringVarP(&caCert, "ca-cert", "r", "certs/ca-cert.pem", "Root cert.pem file path")
 	rootCmd.PersistentFlags().StringVarP(&cert, "cert", "e", "certs/client-cert.pem", "Client cert.pem file path")
 	rootCmd.PersistentFlags().StringVarP(&key, "key", "k", "certs/client-key.pem", "Client key.pem file path")

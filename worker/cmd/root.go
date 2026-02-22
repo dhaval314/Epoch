@@ -47,7 +47,7 @@ func init() {
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 
-	rootCmd.PersistentFlags().StringVarP(&target, "target", "t", "localhost:50051", "Server IP")
+	rootCmd.PersistentFlags().StringVarP(&target, "target", "t", "127.0.0.1:50051", "Server IP")
 	rootCmd.PersistentFlags().StringVarP(&caCert, "ca-cert", "r", "certs/ca-cert.pem", "Root cert.pem file path")
 	rootCmd.PersistentFlags().StringVarP(&cert, "cert", "e", "certs/worker-cert.pem", "Worker cert.pem file path")
 	rootCmd.PersistentFlags().StringVarP(&key, "key", "k", "certs/worker-key.pem", "Worker key.pem file path")
@@ -134,13 +134,13 @@ func executeCommand(ctx context.Context, req *pb.Job)(string, error){
 func connectWorker(cmd *cobra.Command, args[] string){
 
 	// Generate the certificate from the pem blocks
-	cert, err := tls.LoadX509KeyPair("certs/worker-cert.pem", "certs/worker-key.pem")
+	cert, err := tls.LoadX509KeyPair(cert, key)
 	if err != nil{
 		log.Fatalf("[-] Error reading certificates %v", err)
 	}
 
 	// Root cert
-	caCert, err := os.ReadFile("certs/ca-cert.pem")
+	caCert, err := os.ReadFile(caCert)
 	if err != nil{
 		log.Printf("[-] Error loading server certificate %v", err)
 	}
@@ -155,9 +155,9 @@ func connectWorker(cmd *cobra.Command, args[] string){
 		RootCAs: caCertPool, // The Server used ClientCAs to verify incoming clients. The Client/Worker uses RootCAs to verify the destination server.
 	}
 
-	conn, err := grpc.NewClient("localhost:50051", grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
+	conn, err := grpc.NewClient(target, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
 	if err != nil{
-		log.Printf("[-] Error connecting to server: %v\n", err)
+		log.Fatalf("[-] Error connecting to server: %v\n", err)
 	}
 	defer conn.Close()
 	log.Println("[+] Successfully Connected to the server")
@@ -167,7 +167,7 @@ func connectWorker(cmd *cobra.Command, args[] string){
 
 	stream, err := client.ConnectWorker(ctx, &pb.WorkerHello{WorkerId: WorkerId, MemoryMb: 2}) // Get the cmd.workerid from parsed the flag
 	if err != nil{
-		log.Printf("[-] Error connecting to server: %v\n", err)
+		log.Fatalf("[-] Error connecting to server: %v\n", err)
 	}
 	for{
 		job, err := stream.Recv()
