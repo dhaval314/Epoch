@@ -14,56 +14,32 @@ def debug(s):
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-@pytest.fixture(scope="session")
-def distributed_setup():
-    try:
-        subprocess.run(["go", "build", "-o", "bin/server", "./server"], check=True)
-        subprocess.run(["go", "build", "-o", "bin/client", "./client"], check=True)
-        subprocess.run(["go", "build", "-o", "bin/worker", "./worker"], check=True)
-        logging.info("[+] Created binaries successfully")
-    except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"[-] Error creating binaries: {e}") from e
+# @pytest.fixture(scope="session")
+# def distributed_setup():
+#     try:
+#         subprocess.run(["go", "build", "-o", "bin/server", "./server"], check=True)
+#         subprocess.run(["go", "build", "-o", "bin/client", "./client"], check=True)
+#         subprocess.run(["go", "build", "-o", "bin/worker", "./worker"], check=True)
+#         logging.info("[+] Created binaries successfully")
+#     except subprocess.CalledProcessError as e:
+#         raise RuntimeError(f"[-] Error creating binaries: {e}") from e
 
 @pytest.fixture(scope="session", autouse=True)
-def server_and_worker(distributed_setup):
-    # Wipe the database once at the start of the session.
-    try:
-        if os.path.exists("badger"):
-            shutil.rmtree("badger")
-        logging.info("[+] Deleted database to start fresh")
-    except Exception as e:
-        raise RuntimeError(f"[-] Error deleting database: {e}") from e
+def server_and_worker():
 
-    # Start the server.
     try:
-        process = subprocess.Popen(["./bin/server"])
-        logging.info("[+] Started server successfully")
-        time.sleep(1)
+        process = subprocess.run(list("docker compose up -d --scale worker=3".split(" ")))
+        time.sleep(3)
     except Exception as e:
-        raise RuntimeError(f"[-] Error starting server: {e}") from e
-
-    # Start 3 workers.
-    worker_list = []
-    for i in range(1, 4):
-        try:
-            p = subprocess.Popen(["./bin/worker", f"--worker-id={i}"])
-            worker_list.append(p)
-            time.sleep(1)
-            logging.info(f"[+] Started worker {i} successfully")
-        except Exception as e:
-            raise RuntimeError(f"[-] Error starting worker {i}: {e}") from e
+        raise RuntimeError(f"[-] Error running docker compose: {e}") from e
 
     yield process
 
-    # Teardown — terminate workers then server.
-    for w in worker_list:
-        w.terminate()
-        w.wait()
-        time.sleep(1)
-
-    process.terminate()
-    process.wait()
-    time.sleep(1)
+    # Teardown — nuke the db.
+    try:
+        subprocess.run(list("docker compose down -v".split(" ")))
+    except Exception as e:
+        raise RuntimeError(f"[-] Error in docker compose: {e}") from e
 
 
 
