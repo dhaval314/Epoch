@@ -12,7 +12,7 @@ openssl req -newkey rsa:4096 -nodes -keyout server-key.pem -out server-req.pem -
 
 # 3. Sign the Server's Request with the CA's Key (Add SANs for Go 1.15+)
 # Go requires "Subject Alternative Names" (SAN) for localhost.
-openssl x509 -req -in server-req.pem -days 60 -CA ca-cert.pem -CAkey ca-key.pem -CAcreateserial -out server-cert.pem -extfile <(printf "subjectAltName=DNS:localhost,IP:0.0.0.0,IP:127.0.0.1")
+openssl x509 -req -in server-req.pem -days 60 -CA ca-cert.pem -CAkey ca-key.pem -CAcreateserial -out server-cert.pem -extfile <(printf "subjectAltName=DNS:localhost,DNS:server,IP:0.0.0.0,IP:127.0.0.1")
 
 echo "Server's Signed Certificate"
 openssl x509 -in server-cert.pem -noout -text

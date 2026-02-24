@@ -1,0 +1,25 @@
+networks:
+  epoch-net:
+
+services:
+  server:
+    image: epoch-server
+    ports:
+      - 50051:50051
+    volumes:
+      - ./certs:/app/certs
+      - ./badger:/app/badger
+    networks:
+      - epoch-net
+  worker:
+    image: epoch-worker
+    user: root
+    restart: on-failure
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./certs:/app/certs
+    command: ["./worker", "--target", "server:50051", "--worker-id", "worker-1"]
+    networks:
+      - epoch-net
+    environment:
+      - DOCKER_HOST=unix:///var/run/docker.sock
