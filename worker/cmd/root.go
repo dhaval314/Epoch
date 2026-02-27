@@ -7,12 +7,15 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"log"
+	"encoding/json"
+	"encoding/base64"
 	"github.com/spf13/cobra"
 
 	pb "github.com/dhaval314/epoch/proto"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/api/types/registry"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -69,9 +72,25 @@ func executeCommand(ctx context.Context, req *pb.Job)(string, error){
 		return "", err
 	}
 	defer apiClient.Close()
+	
+	encoded_auth := ""
+	log.Printf("[*] Received Auth User: '%s'", req.RegistryUsername)
+	// Check whether the client wants to pull a private image
+	if req.RegistryUsername != ""{
+		auth_config := registry.AuthConfig{Username: req.RegistryUsername, 
+											Password: req.RegistryPassword, 
+											ServerAddress: req.RegistryServer}
+		
+		auth_config_json, err := json.Marshal(auth_config)
+		if err != nil{
+			log.Printf("[-] Error marshal %v", err)
+		}
+
+		encoded_auth = base64.URLEncoding.EncodeToString(auth_config_json)
+	}
 
 	// Pull the image from dockerhub
-	reader, err := apiClient.ImagePull(ctx, req.Image, image.PullOptions{})
+	reader, err := apiClient.ImagePull(ctx, req.Image, image.PullOptions{RegistryAuth: encoded_auth})
 	if err!= nil{
 		log.Printf("[-] Error pulling container: %v\n", err)
 		return "", err

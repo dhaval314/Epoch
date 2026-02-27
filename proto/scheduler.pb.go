@@ -22,13 +22,16 @@ const (
 )
 
 type Job struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Command       string                 `protobuf:"bytes,2,opt,name=command,proto3" json:"command,omitempty"`
-	Schedule      string                 `protobuf:"bytes,3,opt,name=schedule,proto3" json:"schedule,omitempty"`
-	Image         string                 `protobuf:"bytes,4,opt,name=image,proto3" json:"image,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Id               string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Command          string                 `protobuf:"bytes,2,opt,name=command,proto3" json:"command,omitempty"`
+	Schedule         string                 `protobuf:"bytes,3,opt,name=schedule,proto3" json:"schedule,omitempty"`
+	Image            string                 `protobuf:"bytes,4,opt,name=image,proto3" json:"image,omitempty"`
+	RegistryUsername string                 `protobuf:"bytes,5,opt,name=registry_username,json=registryUsername,proto3" json:"registry_username,omitempty"`
+	RegistryPassword string                 `protobuf:"bytes,6,opt,name=registry_password,json=registryPassword,proto3" json:"registry_password,omitempty"`
+	RegistryServer   string                 `protobuf:"bytes,7,opt,name=registry_server,json=registryServer,proto3" json:"registry_server,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *Job) Reset() {
@@ -89,6 +92,28 @@ func (x *Job) GetImage() string {
 	return ""
 }
 
+func (x *Job) GetRegistryUsername() string {
+	if x != nil {
+		return x.RegistryUsername
+	}
+	return ""
+}
+
+func (x *Job) GetRegistryPassword() string {
+	if x != nil {
+		return x.RegistryPassword
+	}
+	return ""
+}
+
+func (x *Job) GetRegistryServer() string {
+	if x != nil {
+		return x.RegistryServer
+	}
+	return ""
+}
+
+// Worker sends this to the server
 type JobResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
@@ -406,12 +431,15 @@ var File_proto_scheduler_proto protoreflect.FileDescriptor
 
 const file_proto_scheduler_proto_rawDesc = "" +
 	"\n" +
-	"\x15proto/scheduler.proto\x12\tscheduler\"a\n" +
+	"\x15proto/scheduler.proto\x12\tscheduler\"\xe4\x01\n" +
 	"\x03Job\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
 	"\acommand\x18\x02 \x01(\tR\acommand\x12\x1a\n" +
 	"\bschedule\x18\x03 \x01(\tR\bschedule\x12\x14\n" +
-	"\x05image\x18\x04 \x01(\tR\x05image\"Q\n" +
+	"\x05image\x18\x04 \x01(\tR\x05image\x12+\n" +
+	"\x11registry_username\x18\x05 \x01(\tR\x10registryUsername\x12+\n" +
+	"\x11registry_password\x18\x06 \x01(\tR\x10registryPassword\x12'\n" +
+	"\x0fregistry_server\x18\a \x01(\tR\x0eregistryServer\"Q\n" +
 	"\vJobResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x0e\n" +
