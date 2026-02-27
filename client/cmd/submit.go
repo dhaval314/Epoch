@@ -31,12 +31,20 @@ func init(){
 	submit.Flags().StringP("image", "i","alpine","Docker image")
 	submit.Flags().StringP("schedule", "s","100","Time interval to execute the image in (in seconds)")
 
+	submit.Flags().String("registry-user", "", "registry username")
+	submit.Flags().String("registry-pass", "", "registry password")
+	submit.Flags().String("registry-url", "", "docker.io")
+
 }
 
 func submitJob(cmd *cobra.Command, args []string){
 	command, _ := cmd.Flags().GetString("command")
 	image, _ := cmd.Flags().GetString("image")
 	schedule, _ := cmd.Flags().GetString("schedule")
+	
+	registry_user, _ := cmd.Flags().GetString("registry-user")
+	registry_pass, _ := cmd.Flags().GetString("registry-pass")
+	registry_url, _ := cmd.Flags().GetString("registry-url")
 	
 	// NOTE: this code block for initializing the connection is repeated in submit.go and status.go
 	// Generate the certificate from the pem blocks
@@ -73,7 +81,13 @@ func submitJob(cmd *cobra.Command, args []string){
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	response, err := client.SubmitJob(ctx, &pb.Job{Id:strconv.Itoa(rand.Int()), Command: command, Schedule: schedule, Image: image})
+	response, err := client.SubmitJob(ctx, &pb.Job{Id:strconv.Itoa(rand.Int()), 
+													Command: command, 
+													Schedule: schedule, 
+													Image: image,
+													RegistryUsername: registry_user,
+													RegistryPassword: registry_pass,
+													RegistryServer: registry_url,})
 	if err != nil{
 		log.Fatalf("[-] Error sending job to server %v", err)
 	}

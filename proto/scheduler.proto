@@ -7,6 +7,9 @@ message Job {
     string command = 2;
     string schedule = 3;
     string image = 4;
+    string registry_username = 5;
+    string registry_password = 6;
+    string registry_server = 7;
 }
 
 // Worker sends this to the server

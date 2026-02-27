@@ -3,6 +3,9 @@ networks:
 
 services:
   server:
+    build:
+      context: .
+      dockerfile: server.dockerfile
     image: epoch-server
     ports:
       - 50051:50051
@@ -11,7 +14,11 @@ services:
       - badger_data:/app/badger
     networks:
       - epoch-net
+      
   worker:
+    build:
+      context: .
+      dockerfile: worker.dockerfile
     image: epoch-worker
     user: root
     restart: on-failure
