@@ -14,7 +14,7 @@ services:
       - badger_data:/app/badger
     networks:
       - epoch-net
-      
+
   worker:
     build:
       context: .
@@ -25,7 +25,8 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./certs:/app/certs
-    command: ["./worker", "--target", "server:50051", "--worker-id", "worker-1"]
+    command:
+      ["sh", "-c", "./worker --target server:50051 --worker-id $$HOSTNAME"]
     networks:
       - epoch-net
     environment:

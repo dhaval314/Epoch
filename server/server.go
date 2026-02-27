@@ -51,16 +51,17 @@ func runScheduler() {
                 if err != nil {
                     continue
                 }
-				if sch == -1{
+				if sch == -1 {
 					log.Printf("[*] Scheduling one-off Job %s", jobId)
 					select {
-                    case jobQueue <- jobContext.Job:
-                        log.Println("[+] Job pushed to queue")
-						jobContext.Job.Schedule = "0"
+					case jobQueue <- jobContext.Job:
+						log.Println("[+] Job pushed to queue")
+						// Use -2 as sentinel: "already dispatched, do not re-schedule"
+						jobContext.Job.Schedule = "-2"
 						store.jobs[jobId] = jobContext
-                    default:
-                        log.Println("[-] Job queue full! Skipping.")
-                    }
+					default:
+						log.Println("[-] Job queue full! Skipping.")
+					}
 				} else if sch > 0 && now % int64(sch) == 0 {
 					log.Printf("[*] Scheduling Job %s", jobId)
 					select {
@@ -105,12 +106,18 @@ func (s *server) SubmitJob(ctx context.Context, req *pb.Job) (*pb.JobResponse, e
 func (s *server) ConnectWorker(req *pb.WorkerHello, stream grpc.ServerStreamingServer[pb.Job]) (error){
 	log.Printf("[+] Worker %s connected", req.WorkerId)
 	for {
-		select{
-		case job := <- jobQueue: // If a new job enters the channel, it is sent to the worker
+		select {
+		case job := <-jobQueue: // If a new job enters the channel, it is sent to the worker
 			log.Printf("[*] Dispatching Job %s to Worker %s", job.Id, req.WorkerId)
 			err := stream.Send(job)
-			if err != nil{
-				log.Printf("[-] Error sending job to worker: %v", err)
+			if err != nil {
+				log.Printf("[-] Error sending job to worker %s, re-queuing: %v", req.WorkerId, err)
+				// Put the job back so another worker can pick it up.
+				select {
+				case jobQueue <- job:
+				default:
+					log.Printf("[-] Re-queue failed: channel full, job %s lost", job.Id)
+				}
 				return err
 			}
 		case <-stream.Context().Done():

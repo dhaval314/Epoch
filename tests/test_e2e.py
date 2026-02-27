@@ -14,31 +14,30 @@ def debug(s):
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# @pytest.fixture(scope="session")
-# def distributed_setup():
-#     try:
-#         subprocess.run(["go", "build", "-o", "bin/server", "./server"], check=True)
-#         subprocess.run(["go", "build", "-o", "bin/client", "./client"], check=True)
-#         subprocess.run(["go", "build", "-o", "bin/worker", "./worker"], check=True)
-#         logging.info("[+] Created binaries successfully")
-#     except subprocess.CalledProcessError as e:
-#         raise RuntimeError(f"[-] Error creating binaries: {e}") from e
-
 @pytest.fixture(scope="session", autouse=True)
 def server_and_worker():
 
     try:
-        process = subprocess.run(list("docker compose up -d --scale worker=3".split(" ")))
-        time.sleep(3)
-    except Exception as e:
+        process = subprocess.run(
+            "docker compose up -d --build --scale worker=3".split(),
+            check=True,
+            cwd=PROJECT_ROOT,
+        )
+        # Give containers enough time to start after the image build completes.
+        time.sleep(15)
+    except subprocess.CalledProcessError as e:
         raise RuntimeError(f"[-] Error running docker compose: {e}") from e
 
     yield process
 
     # Teardown — nuke the db.
     try:
-        subprocess.run(list("docker compose down -v".split(" ")))
-    except Exception as e:
+        subprocess.run(
+            "docker compose down -v".split(),
+            check=True,
+            cwd=PROJECT_ROOT,
+        )
+    except subprocess.CalledProcessError as e:
         raise RuntimeError(f"[-] Error in docker compose: {e}") from e
 
 
@@ -58,6 +57,7 @@ def test_submit_one_off_job():
         ["./bin/client", "submit", "-i", "alpine", "-c",
          "echo Hello from test_submit_one_off_job", "-s", "-1"],
         capture_output=True, text=True, check=True,
+        cwd=PROJECT_ROOT,
     )
     time.sleep(2)
     assert out.returncode == 0
@@ -68,14 +68,16 @@ def test_check_status():
         ["./bin/client", "submit", "-i", "alpine", "-c",
          "echo Hello from test_check_status", "-s", "-1"],
         capture_output=True, text=True, check=True,
+        cwd=PROJECT_ROOT,
     )
-    time.sleep(5)
+    time.sleep(15)
 
     job_id = extract_job_id(out.stderr)
 
     out = subprocess.run(
         ["./bin/client", "status", "-j", str(job_id)],
         capture_output=True, text=True, check=True,
+        cwd=PROJECT_ROOT,
     )
     time.sleep(2)
 
@@ -87,14 +89,16 @@ def test_failed_submit_job():
         ["./bin/client", "submit", "-i", "this-image-does-not-exist", "-c",
          "echo Hello from test_failed_job_submit", "-s", "-1"],
         capture_output=True, text=True, check=True,
+        cwd=PROJECT_ROOT,
     )
-    time.sleep(5)
+    time.sleep(15)
 
     job_id = extract_job_id(out.stderr)
 
     out = subprocess.run(
         ["./bin/client", "status", "-j", str(job_id)],
         capture_output=True, text=True, check=True,
+        cwd=PROJECT_ROOT,
     )
     time.sleep(1)
 
@@ -106,6 +110,7 @@ def test_cron_job():
         ["./bin/client", "submit", "-i", "alpine", "-c",
          "echo Hello from test_cron_job", "-s", "2"],
         capture_output=True, text=True, check=True,
+        cwd=PROJECT_ROOT,
     )
     time.sleep(7)
 
@@ -114,6 +119,7 @@ def test_cron_job():
     out = subprocess.run(
         ["./bin/client", "status", "-j", str(job_id)],
         capture_output=True, text=True, check=True,
+        cwd=PROJECT_ROOT,
     )
     time.sleep(1)
 

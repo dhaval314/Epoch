@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 	"io"
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -16,6 +17,7 @@ import (
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/api/types/registry"
+	"github.com/docker/docker/pkg/stdcopy"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -141,12 +143,13 @@ func executeCommand(ctx context.Context, req *pb.Job)(string, error){
     defer out.Close()
 
 	// Return the container output
-	bodyBytes, err := io.ReadAll(out)
-	if err != nil{
-		log.Println("[-] Error reading container output")
-		return "", nil
+	var stdout, stderr bytes.Buffer
+	_, err = stdcopy.StdCopy(&stdout, &stderr, out)
+	if err != nil {
+		log.Println("[-] Error demultiplexing container output")
+		return "", err
 	}
-	bodyString := string(bodyBytes)
+	bodyString := stdout.String() + stderr.String()
 	return bodyString, nil
 }
 

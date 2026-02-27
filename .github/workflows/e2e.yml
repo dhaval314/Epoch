@@ -2,13 +2,16 @@ name: E2E Tests
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -16,21 +19,25 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24' 
+          go-version: "1.24"
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          python-version: "3.13"
 
       - name: Install Dependencies
         run: pip install pytest
+
+      - name: Generate TLS Certificates
+        working-directory: certs
+        run: bash gen.sh
 
       - name: Build Client Binary
         run: go build -o bin/client ./client
 
       - name: Run Pytest Suite
-        run: pytest -s
+        run: pytest -s tests/
 
       - name: Dump Engine Logs on Failure
         if: failure()
