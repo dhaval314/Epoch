@@ -1,49 +1,56 @@
 # Epoch
 
-Epoch is a simple, distributed job scheduler built with Go and gRPC. It manages executing tasks inside Docker containers across connected worker nodes.
+A distributed job scheduler built with Go and gRPC. Jobs are defined with a Docker image, a command, and a repeat interval. The server dispatches scheduled jobs to connected worker nodes, which execute them inside Docker containers.
 
-## Components
+## Architecture
 
-- **Server**: Manages job submissions, scheduling, and worker connections.
-- **Worker**: Connects to the server and executes jobs using Docker.
-- **Client**: Submits jobs to the server.
+| Component  | Role                                                                                                                      |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **Server** | Accepts job submissions, maintains a persistent job queue (BadgerDB), and streams jobs to workers over mTLS-secured gRPC. |
+| **Worker** | Connects to the server, receives jobs, and runs them via the local Docker daemon.                                         |
+| **Client** | CLI tool for submitting jobs to the server.                                                                               |
 
 ## Prerequisites
 
 - Go 1.24+
-- Docker running on worker nodes
+- Docker (required on worker nodes)
+- OpenSSL (for certificate generation)
 
-## Getting Started
+## Setup
 
-1. **Start the Server**
+**1. Generate TLS certificates**
 
-   ```sh
-   go run server/server.go
-   ```
+```sh
+cd certs && bash gen.sh
+```
 
-2. **Start a Worker**
-   Ensure Docker is running, then:
+**2. Run with Docker Compose**
 
-   ```sh
-   go run worker/worker.go
-   ```
+```sh
+docker compose up --build
+```
 
-3. **Submit a Job**
-   ```sh
-   go run client/client.go
-   ```
+Or run each component manually:
+
+```sh
+go run server/server.go
+go run worker/worker.go --target localhost:50051 --worker-id worker-1
+go run client/client.go
+```
 
 ## How It Works
 
-- The **Server** listens for requests from the client and manages an in-memory job queue.
-- **Workers** connect to the server via a streaming gRPC connection to receive jobs.
-- **Jobs** are defined with a command, schedule (interval in seconds), and a Docker image.
-- When a job is scheduled, the server dispatches it to an available worker.
-- The worker pulls the specified Docker image and executes the command.
+1. The client submits a job (image, command, interval) to the server over gRPC.
+2. The server stores the job in BadgerDB and dispatches it on schedule to an available worker.
+3. The worker pulls the Docker image and executes the command, streaming results back.
+4. All communication between components is secured with mutual TLS.
 
-## Project Structure
+## Project Layout
 
-- `server/`: Scheduler logic and gRPC server implementation.
-- `worker/`: Worker logic and Docker client integration.
-- `client/`: Client for job submission.
-- `proto/`: Protocol Buffer definitions for the gRPC service.
+```
+server/   – Scheduler and gRPC server
+worker/   – Worker and Docker client integration
+client/   – Job submission CLI
+proto/    – Protobuf service definitions
+certs/    – TLS certificate generation scripts
+```
